@@ -2,9 +2,9 @@ name: build obs plugin
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 env:
   PLUGIN_NAME: scene-as-transition
