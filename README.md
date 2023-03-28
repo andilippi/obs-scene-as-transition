@@ -6,8 +6,8 @@ Plugin for OBS Studio to show a browser source during scene transition
 # Build
 1. In-tree build
     - Build OBS Studio: https://obsproject.com/wiki/Install-Instructions
-    - Check out this repository to plugins/browser-transition
-    - Add `add_subdirectory(browser-transition)` to plugins/CMakeLists.txt
+    - Check out this repository to plugins/scene-as-transition
+    - Add `add_subdirectory(scene-as-transition)` to plugins/CMakeLists.txt
     - Rebuild OBS Studio
 
 1. Stand-alone build (Linux only)
@@ -15,4 +15,4 @@ Plugin for OBS Studio to show a browser source during scene transition
     - Check out this repository and run `cmake -S . -B build -DBUILD_OUT_OF_TREE=On && cmake --build build`
 
 # Donations
-https://www.paypal.me/exeldro
+https://www.paypal.me/andilippi
