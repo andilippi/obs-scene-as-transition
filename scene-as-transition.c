@@ -33,7 +33,6 @@ static void *scene_as_transition_create(obs_data_t *settings,
 
 	st = bzalloc(sizeof(*st));
 	st->source = source;
-	const char *scene_name = obs_data_get_string(settings, "scene");
 
 	scene_as_transition_update(st, settings);
 	//obs_transition_enable_fixed(source, true, 0);
@@ -130,7 +129,6 @@ void scene_as_transition_defaults(obs_data_t *settings)
 
 obs_properties_t *scene_as_transition_properties(void *data)
 {
-	struct scene_as_transition *scene_as_transition = data;
 	obs_properties_t *props = obs_properties_create();
 	obs_property_t *scene = obs_properties_add_list(
 		props, "scene", "Scene", OBS_COMBO_TYPE_EDITABLE,
