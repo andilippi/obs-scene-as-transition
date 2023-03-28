@@ -1,6 +1,6 @@
-# Browser transition for OBS Studio
+# Scene as Transition for OBS Studio
 
-Plugin for OBS Studio to show a browser source during scene transition
+Plugin for OBS Studio to show a scene during scene transition
 
 
 # Build
