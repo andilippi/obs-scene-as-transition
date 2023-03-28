@@ -78,6 +78,6 @@
             "qtVersion": 6
         }
     },
-    "name": "browser-transition",
+    "name": "scene-as-transition",
     "version": "0.0.1"
 }
