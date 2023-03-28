@@ -140,6 +140,8 @@ obs_properties_t *scene_as_transition_properties(void *data)
 		0, 100.0, 1.0);
 	obs_property_float_set_suffix(p, "%");
 
+	UNUSED_PARAMETER(data);
+
 	return props;
 }
 
