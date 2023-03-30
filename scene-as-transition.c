@@ -180,14 +180,13 @@ bool scene_as_transition_list_add_scene(void *data,
 	return true;
 }
 
-bool scene_as_transition_list_add_filter(obs_source_t *parent,
+void scene_as_transition_list_add_filter(obs_source_t *parent,
 					 obs_source_t *child, void *data)
 {
 	UNUSED_PARAMETER(parent);
 	obs_property_t *p = data;
 	const char *name = obs_source_get_name(child);
 	obs_property_list_add_string(p, name, name);
-	return true;
 }
 
 static bool scene_modified(obs_properties_t *props, obs_property_t *property,
