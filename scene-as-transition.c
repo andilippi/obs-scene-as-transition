@@ -205,6 +205,7 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 	obs_data_set_string(settings, "filter", "No Filter Selected");
 
 	obs_source_release(scene);
+	UNUSED_PARAMETER(property);
 
 	return true;
 }
