@@ -30,6 +30,8 @@ Some examples of this plugin will be uploaded for you to get your hands on at [S
     - Check out this repository and run `cmake -S . -B build -DBUILD_OUT_OF_TREE=On && cmake --build build`
 
 # Support
-- [Send me a beer to say thanks!](https://www.paypal.me/andilippi)
-- [Come say hi on Twitch](https://www.twitch.tv/andilippi)
-- [Learn more about OBS and upgrading your streams](https://www.youtube.com/andilippi)
+- [**Patreon**](https://www.patreon.com/Andilippi) - Get access to all my products and more exclusive perks
+- [**Ko-Fi**](https://ko-fi.com/andilippi) - Get access to all my products and more exclusive perks
+- [**PayPal**](https://www.paypal.me/andilippi) - Send me a beer to say thanks!
+- [**Twitch**](https://www.twitch.tv/andilippi) - Come say hi and feel free to ask questions!
+- [**YouTube**](https://www.youtube.com/andilippi) - Learn more about OBS and upgrading your streams
