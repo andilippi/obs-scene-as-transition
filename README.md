@@ -1,7 +1,20 @@
 # Scene as Transition for OBS Studio
 
-Plugin for OBS Studio to show a scene during scene transition
+A plugin for OBS Studio that will allow you to use a Scene as a Transition.
 
+This can be used to create all kinds of transitions. It is recommended to get the most out of this plugin that you use other powerful plugins such as [Exeldro's Move Transition plugin](https://obsproject.com/forum/resources/move-transition.913/) to create advanced movements.
+You can even make the transitions dynamic by passing information from a program like [SAMMI](https://sammi.solutions) or [Streamer.Bot](https://sammi.solutions).
+
+An example would be putting a text source on the transition scene and having it update with the name of the scene or game you are transitioning to.
+
+# How To Use
+1. Under the '**Scene Transitions**' dock press '**+**' and select '**Scene**' and give the transition a name.
+
+1. You can configure the following '**Scene as Transition Properties**':
+    - **Scene** • Select the scene you wish to use as the transition.
+    - **Duration** • Set how long you wish the transition to last in milliseconds (ms).
+    - **Transition Point** • Set at which point you want the current scene to switch to the new scene. This is either a **Percentage** or **Time in milliseconds** (ms).
+    - **Filter To Trigger** • Select a filter that is on your selected scene to be enabled when the transition is started.
 
 # Build
 1. In-tree build
@@ -14,5 +27,7 @@ Plugin for OBS Studio to show a scene during scene transition
     - Verify that you have package with development files for OBS
     - Check out this repository and run `cmake -S . -B build -DBUILD_OUT_OF_TREE=On && cmake --build build`
 
-# Donations
-https://www.paypal.me/andilippi
+# Support
+- [Send me a beer to say thanks!](https://www.paypal.me/andilippi)
+- [Come say hi on Twitch](https://www.twitch.tv/andilippi)
+- [Learn more about OBS and upgrading your streams](https://www.youtube.com/andilippi)
