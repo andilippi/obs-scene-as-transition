@@ -3,7 +3,7 @@
 A plugin for OBS Studio that will allow you to use a Scene as a Transition.
 
 This can be used to create all kinds of transitions. It is recommended to get the most out of this plugin that you use other powerful plugins such as [Exeldro's Move Transition plugin](https://obsproject.com/forum/resources/move-transition.913/) to create advanced movements.
-You can even make the transitions dynamic by passing information from a program like [SAMMI](https://sammi.solutions) or [Streamer.Bot](https://sammi.solutions).
+You can even make the transitions dynamic by passing information from a program like [SAMMI](https://sammi.solutions) or [Streamer.Bot](https://streamer.bot).
 
 An example would be putting a text source on the transition scene and having it update with the name of the scene or game you are transitioning to.
 
