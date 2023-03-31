@@ -7,6 +7,8 @@ You can even make the transitions dynamic by passing information from a program 
 
 An example would be putting a text source on the transition scene and having it update with the name of the scene or game you are transitioning to.
 
+Some examples of this plugin will be uploaded for you to get your hands on at [StreamUP](https://streamup.tips).
+
 # How To Use
 1. Under the '**Scene Transitions**' dock press '**+**' and select '**Scene**' and give the transition a name.
 
