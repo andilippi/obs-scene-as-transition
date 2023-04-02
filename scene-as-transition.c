@@ -25,7 +25,6 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 	st->transition_scene =
 		obs_get_source_by_name(obs_data_get_string(settings, "scene"));
 
-
 	st->duration = (float)obs_data_get_double(settings, "duration");
 	obs_transition_enable_fixed(st->source, true, (uint32_t)st->duration);
 
@@ -52,7 +51,6 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 						   filter_name);
 }
 
-
 static void *scene_as_transition_create(obs_data_t *settings,
 					obs_source_t *source)
 {
@@ -73,21 +71,25 @@ static void scene_as_transition_destroy(void *data)
 	bfree(st);
 }
 
+
 static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 {
-	UNUSED_PARAMETER(effect);
 	struct scene_as_transition *st = data;
 
-	float f = obs_transition_get_time(st->source);
-	bool transitioning;
-	if (f <= st->transition_point) {
-		transitioning = obs_transition_video_render_direct(
-			st->source, OBS_TRANSITION_SOURCE_A);
-	} else {
-		transitioning = obs_transition_video_render_direct(
-			st->source, OBS_TRANSITION_SOURCE_B);
+	float t = obs_transition_get_time(st->source);
+	bool use_a = t < st->transition_point;
+
+	enum obs_transition_target target = use_a ? OBS_TRANSITION_SOURCE_A
+						  : OBS_TRANSITION_SOURCE_B;
+
+	if (!obs_transition_video_render_direct(st->source, target))
+		return;
+
+	if (t > 0.0f && t < 1.0f) {
+		obs_source_video_render(st->transition_scene);
 	}
-	if (transitioning) {
+
+	if (use_a) {
 		if (!st->transitioning) {
 			st->transitioning = true;
 			if (obs_source_showing(st->source))
@@ -108,6 +110,7 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 
 	UNUSED_PARAMETER(effect);
 }
+
 
 static float mix_a(void *data, float t)
 {

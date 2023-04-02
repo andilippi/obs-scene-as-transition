@@ -6,7 +6,7 @@ else()
   cmake_minimum_required(VERSION 3.18)
 endif()
 
-project(scene-as-transition VERSION 1.0.1)
+project(scene-as-transition VERSION 1.0.2)
 set(PROJECT_FULL_NAME "Scene As Transition")
 
 # Set new UUIDs when you start to create a new plugin.
