@@ -147,6 +147,7 @@ void scene_as_transition_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "transition_point", 50.0);
 	obs_data_set_default_double(settings, "transition_point_ms", 500.0);
 	obs_data_set_default_string(settings, "filter", "No Filter Selected");
+	obs_data_set_default_string(settings, "prev_scene", "");
 }
 
 static bool transition_point_type_modified(obs_properties_t *ppts,
@@ -194,17 +195,25 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 {
 	obs_property_t *filter = obs_properties_get(props, "filter");
 	const char *scene_name = obs_data_get_string(settings, "scene");
-	obs_source_t *scene = obs_get_source_by_name(scene_name);
+	const char *prev_scene_name =
+		obs_data_get_string(settings, "prev_scene");
 
-	obs_property_list_clear(filter);
-	obs_property_list_add_string(
-		filter, obs_module_text("No Filter Selected"), "filter");
-	obs_source_enum_filters(scene, scene_as_transition_list_add_filter,
-				filter);
+	if (strcmp(scene_name, prev_scene_name) != 0) {
+		obs_source_t *scene = obs_get_source_by_name(scene_name);
 
-	obs_data_set_string(settings, "filter", "No Filter Selected");
+		obs_property_list_clear(filter);
+		obs_property_list_add_string(
+			filter, obs_module_text("No Filter Selected"),
+			"filter");
+		obs_source_enum_filters(
+			scene, scene_as_transition_list_add_filter, filter);
 
-	obs_source_release(scene);
+		obs_data_set_string(settings, "filter", "No Filter Selected");
+		obs_data_set_string(settings, "prev_scene", scene_name);
+
+		obs_source_release(scene);
+	}
+
 	UNUSED_PARAMETER(property);
 
 	return true;
