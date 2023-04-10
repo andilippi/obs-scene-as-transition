@@ -182,7 +182,7 @@ void scene_as_transition_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "duration", 1000.0);
 	obs_data_set_default_double(settings, "transition_point", 50.0);
 	obs_data_set_default_double(settings, "transition_point_ms", 500.0);
-	obs_data_set_default_string(settings, "filter", "No Filter Selected");
+	obs_data_set_default_string(settings, "filter", obs_module_text("NoFilterSelected"));
 	obs_data_set_default_string(settings, "prev_scene", "");
 }
 
@@ -244,7 +244,7 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 		obs_source_enum_filters(
 			scene, scene_as_transition_list_add_filter, filter);
 
-		obs_data_set_string(settings, "filter", "No Filter Selected");
+		obs_data_set_string(settings, "filter", obs_module_text("NoFilterSelected"));
 		obs_data_set_string(settings, "prev_scene", scene_name);
 
 		obs_source_release(scene);
@@ -280,7 +280,8 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	obs_properties_t *props = obs_properties_create();
 
 	obs_property_t *scene = obs_properties_add_list(
-		props, "scene", "Scene", OBS_COMBO_TYPE_EDITABLE,
+		props, "scene", obs_module_text("Scene"),
+		OBS_COMBO_TYPE_EDITABLE,
 		OBS_COMBO_FORMAT_STRING);
 	obs_property_set_long_description(
 		scene,
