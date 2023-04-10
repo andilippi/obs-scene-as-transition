@@ -71,7 +71,6 @@ static void scene_as_transition_destroy(void *data)
 	bfree(st);
 }
 
-
 static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 {
 	struct scene_as_transition *st = data;
@@ -100,7 +99,7 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 				obs_source_set_enabled(st->filter, true);
 		}
 		obs_source_video_render(st->transition_scene);
-	} else if (st->transitioning) {
+	} else if ((t <= 0.0f || t >= 1.0f) && st->transitioning) {
 		st->transitioning = false;
 		if (obs_source_active(st->source))
 			obs_source_dec_active(st->transition_scene);
@@ -110,7 +109,6 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 
 	UNUSED_PARAMETER(effect);
 }
-
 
 static float mix_a(void *data, float t)
 {
@@ -125,13 +123,48 @@ static float mix_b(void *data, float t)
 }
 
 static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
-					     struct obs_source_audio_mix *audio,
-					     uint32_t mixers, size_t channels,
-					     size_t sample_rate)
+					    struct obs_source_audio_mix *audio,
+					    uint32_t mixers, size_t channels,
+					    size_t sample_rate)
 {
 	struct scene_as_transition *st = data;
-	return obs_transition_audio_render(st->source, ts_out, audio, mixers,
-					   channels, sample_rate, mix_a, mix_b);
+	if (!st)
+		return false;
+
+	uint64_t ts = 0;
+	if (!obs_source_audio_pending(st->transition_scene)) {
+		ts = obs_source_get_audio_timestamp(
+			st->transition_scene);
+		if (!ts)
+			return false;
+	}
+
+	const bool success = obs_transition_audio_render(
+		st->source, ts_out, audio, mixers, channels,
+		sample_rate, mix_a, mix_b);
+	if (!ts)
+		return success;
+
+	if (!*ts_out || ts < *ts_out)
+		*ts_out = ts;
+
+	struct obs_source_audio_mix child_audio;
+	obs_source_get_audio_mix(st->transition_scene, &child_audio);
+	for (size_t mix = 0; mix < MAX_AUDIO_MIXES; mix++) {
+		if ((mixers & (1 << mix)) == 0)
+			continue;
+
+		for (size_t ch = 0; ch < channels; ch++) {
+			register float *out = audio->output[mix].data[ch];
+			register float *in = child_audio.output[mix].data[ch];
+			register float *end = in + AUDIO_OUTPUT_FRAMES;
+
+			while (in < end)
+				*(out++) += *(in++);
+		}
+	}
+
+	return true;
 }
 
 static enum gs_color_space scene_as_transition_video_get_color_space(
@@ -206,7 +239,7 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 
 		obs_property_list_clear(filter);
 		obs_property_list_add_string(
-			filter, obs_module_text("No Filter Selected"),
+			filter, obs_module_text("NoFilterSelected"),
 			"filter");
 		obs_source_enum_filters(
 			scene, scene_as_transition_list_add_filter, filter);
@@ -222,6 +255,23 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 	return true;
 }
 
+static void scene_as_transition_enum_active_sources(
+	void *data, obs_source_enum_proc_t enum_callback, void *param)
+{
+	struct scene_as_transition *st = data;
+	if (st->transition_scene && st->transitioning)
+		enum_callback(st->source, st->transition_scene, param);
+}
+
+static void scene_as_transition_enum_all_sources(
+	void *data, obs_source_enum_proc_t enum_callback, void *param)
+{
+	struct scene_as_transition *st = data;
+	if (st->transition_scene)
+		enum_callback(st->source, st->transition_scene, param);
+}
+
+
 obs_properties_t *scene_as_transition_properties(void *data)
 {
 
@@ -235,7 +285,7 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	obs_property_set_long_description(
 		scene,
 		obs_module_text(
-			"Select the scene you wish to use as the transition."));
+			"SceneDescription"));
 	obs_enum_scenes(scene_as_transition_list_add_scene, scene);
 	obs_property_set_modified_callback(scene, scene_modified);
 
@@ -246,53 +296,51 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	obs_property_set_long_description(
 		p,
 		obs_module_text(
-			"The total duration of the transition in milliseconds."));
+			"DurationDescription"));
 
 	obs_properties_t *transition_point_group = obs_properties_create();
 
 	obs_properties_add_group(props, "transition_point_group",
-				 obs_module_text("Transition Point"),
+				 obs_module_text("TransitionPoint"),
 				 OBS_GROUP_NORMAL, transition_point_group);
 
 	p = obs_properties_add_list(transition_point_group, "tp_type",
-				    obs_module_text("Type"),
+				    obs_module_text("TransitionPointType"),
 				    OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
-	obs_property_list_add_int(p, obs_module_text("Percentage"), 0);
-	obs_property_list_add_int(p, obs_module_text("Time"), 1);
+	obs_property_list_add_int(p, obs_module_text("TransitionPointPercentage"), 0);
+	obs_property_list_add_int(p, obs_module_text("TransitionPointTime"), 1);
 	obs_property_set_long_description(
 		p,
 		obs_module_text(
-			"Select the type of transition point (percentage or time)."));
+			"TransitionPointTypeDescription"));
 	obs_property_set_modified_callback(p, transition_point_type_modified);
 	p = obs_properties_add_float_slider(transition_point_group,
 					    "transition_point",
-					    obs_module_text("Transition Point"),
+					    obs_module_text("TransitionPoint"),
 					    0, 100.0, 1.0);
 	obs_property_float_set_suffix(p, "%");
 	obs_property_set_long_description(
 		p,
 		obs_module_text(
-			"The position of the transition point as a percentage of the total duration."));
+			"TransitionPointPercentageDescription"));
 
 	p = obs_properties_add_float(transition_point_group,
 				     "transition_point_ms",
-				     obs_module_text("Transition Point"), 0,
+				     obs_module_text("TransitionPoint"), 0,
 				     30000.0, 100.0);
 	obs_property_float_set_suffix(p, " ms");
 	obs_property_set_long_description(
-		p,
-		obs_module_text(
-			"The position of the transition point in milliseconds."));
+		p, obs_module_text("TransitionPointTimeDescription"));
 
 	obs_property_t *filter = obs_properties_add_list(
-		props, "filter", obs_module_text("Filter To Trigger"),
+		props, "filter", obs_module_text("FilterToTrigger"),
 		OBS_COMBO_TYPE_EDITABLE, OBS_COMBO_FORMAT_STRING);
 	obs_property_list_add_string(
-		filter, obs_module_text("No Filter Selected"), "filter");
+		filter, obs_module_text("NoFilterSelected"), "filter");
 	obs_property_set_long_description(
 		filter,
 		obs_module_text(
-			"Selecting a filter here will enable it when the transition begins."));
+			"FilterToTriggerDescription"));
 	obs_source_enum_filters(st->transition_scene,
 				scene_as_transition_list_add_filter, filter);
 
@@ -316,6 +364,8 @@ struct obs_source_info scene_as_transition = {
 	.load = scene_as_transition_update,
 	.update = scene_as_transition_update,
 	.get_defaults = scene_as_transition_defaults,
+	.enum_active_sources = scene_as_transition_enum_active_sources,
+	.enum_all_sources = scene_as_transition_enum_all_sources,
 	.video_render = scene_as_transition_video_render,
 	.audio_render = scene_as_transition_audio_render,
 	.video_get_color_space = scene_as_transition_video_get_color_space,
