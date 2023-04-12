@@ -1,6 +1,9 @@
 #include "obs-module.h"
 #include "version.h"
 
+#define LOG_OFFSET_DB 6.0f
+#define LOG_RANGE_DB 96.0f
+
 struct scene_as_transition {
 	obs_source_t *source;
 	obs_source_t *transition_scene;
@@ -9,12 +12,47 @@ struct scene_as_transition {
 	float transition_point;
 	float duration;
 	const char *filter_name;
+
+	obs_transition_audio_mix_callback_t mix_a;
+	obs_transition_audio_mix_callback_t mix_b;
+	float transition_a_mul;
+	float transition_b_mul;
 };
 
 static const char *scene_as_transition_get_name(void *type_data)
 {
 	UNUSED_PARAMETER(type_data);
 	return obs_module_text("Scene");
+}
+
+static inline float calc_fade(float t, float mul)
+{
+	t *= mul;
+	return t > 1.0f ? 1.0f : t;
+}
+
+static float mix_a_fade_in_out(void *data, float t)
+{
+	struct scene_as_transition *st = data;
+	return 1.0f - calc_fade(t, st->transition_a_mul);
+}
+
+static float mix_b_fade_in_out(void *data, float t)
+{
+	struct scene_as_transition *st = data;
+	return 1.0f - calc_fade(1.0f - t, st->transition_b_mul);
+}
+
+static float mix_a_cross_fade(void *data, float t)
+{
+	UNUSED_PARAMETER(data);
+	return 1.0f - t;
+}
+
+static float mix_b_cross_fade(void *data, float t)
+{
+	UNUSED_PARAMETER(data);
+	return t;
 }
 
 void scene_as_transition_update(void *data, obs_data_t *settings)
@@ -49,6 +87,33 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 
 	st->filter = obs_source_get_filter_by_name(st->transition_scene,
 						   filter_name);
+
+	st->transition_a_mul = (1.0f / st->transition_point);
+	st->transition_b_mul = (1.0f / (1.0f - st->transition_point));
+
+	float def =
+		(float)obs_data_get_double(settings, "audio_volume") / 100.0f;
+	float db;
+	if (def >= 1.0f)
+		db = 0.0f;
+	else if (def <= 0.0f)
+		db = -INFINITY;
+	else
+		db = -(LOG_RANGE_DB + LOG_OFFSET_DB) *
+			     powf((LOG_RANGE_DB + LOG_OFFSET_DB) /
+					  LOG_OFFSET_DB,
+				  -def) +
+		     LOG_OFFSET_DB;
+	const float mul = obs_db_to_mul(db);
+	obs_source_set_volume(st->transition_scene, mul);
+
+	if (!obs_data_get_int(settings, "audio_fade_style")) {
+		st->mix_a = mix_a_fade_in_out;
+		st->mix_b = mix_b_fade_in_out;
+	} else {
+		st->mix_a = mix_a_cross_fade;
+		st->mix_b = mix_b_cross_fade;
+	}
 }
 
 static void *scene_as_transition_create(obs_data_t *settings,
@@ -59,6 +124,9 @@ static void *scene_as_transition_create(obs_data_t *settings,
 	st = bzalloc(sizeof(*st));
 	st->source = source;
 
+	obs_transition_enable_fixed(st->source, true, 0);
+	obs_source_update(source, settings);
+
 	scene_as_transition_update(st, settings);
 
 	return st;
@@ -68,7 +136,7 @@ static void scene_as_transition_destroy(void *data)
 {
 	struct scene_as_transition *st = data;
 	obs_source_release(st->transition_scene);
-	bfree(st);
+	bfree(data);
 }
 
 static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
@@ -110,22 +178,10 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 	UNUSED_PARAMETER(effect);
 }
 
-static float mix_a(void *data, float t)
-{
-	UNUSED_PARAMETER(data);
-	return 1.0f - t;
-}
-
-static float mix_b(void *data, float t)
-{
-	UNUSED_PARAMETER(data);
-	return t;
-}
-
 static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
-					    struct obs_source_audio_mix *audio,
-					    uint32_t mixers, size_t channels,
-					    size_t sample_rate)
+					     struct obs_source_audio_mix *audio,
+					     uint32_t mixers, size_t channels,
+					     size_t sample_rate)
 {
 	struct scene_as_transition *st = data;
 	if (!st)
@@ -133,16 +189,16 @@ static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
 
 	uint64_t ts = 0;
 	if (!obs_source_audio_pending(st->transition_scene)) {
-		ts = obs_source_get_audio_timestamp(
-			st->transition_scene);
+		ts = obs_source_get_audio_timestamp(st->transition_scene);
 		if (!ts)
 			return false;
 	}
 
-	const bool success = obs_transition_audio_render(
-		st->source, ts_out, audio, mixers, channels,
-		sample_rate, mix_a, mix_b);
-	if (!ts)
+	const bool success = obs_transition_audio_render(st->source, ts_out,
+							 audio, mixers,
+							 channels, sample_rate,
+							 st->mix_a, st->mix_b);
+	if (!ts || !st->transitioning)
 		return success;
 
 	if (!*ts_out || ts < *ts_out)
@@ -182,8 +238,10 @@ void scene_as_transition_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "duration", 1000.0);
 	obs_data_set_default_double(settings, "transition_point", 50.0);
 	obs_data_set_default_double(settings, "transition_point_ms", 500.0);
-	obs_data_set_default_string(settings, "filter", obs_module_text("NoFilterSelected"));
+	obs_data_set_default_string(settings, "filter",
+				    obs_module_text("NoFilterSelected"));
 	obs_data_set_default_string(settings, "prev_scene", "");
+	obs_data_set_default_double(settings, "audio_volume", 100.0);
 }
 
 static bool transition_point_type_modified(obs_properties_t *ppts,
@@ -239,12 +297,12 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 
 		obs_property_list_clear(filter);
 		obs_property_list_add_string(
-			filter, obs_module_text("NoFilterSelected"),
-			"filter");
+			filter, obs_module_text("NoFilterSelected"), "filter");
 		obs_source_enum_filters(
 			scene, scene_as_transition_list_add_filter, filter);
 
-		obs_data_set_string(settings, "filter", obs_module_text("NoFilterSelected"));
+		obs_data_set_string(settings, "filter",
+				    obs_module_text("NoFilterSelected"));
 		obs_data_set_string(settings, "prev_scene", scene_name);
 
 		obs_source_release(scene);
@@ -271,7 +329,6 @@ static void scene_as_transition_enum_all_sources(
 		enum_callback(st->source, st->transition_scene, param);
 }
 
-
 obs_properties_t *scene_as_transition_properties(void *data)
 {
 
@@ -281,12 +338,9 @@ obs_properties_t *scene_as_transition_properties(void *data)
 
 	obs_property_t *scene = obs_properties_add_list(
 		props, "scene", obs_module_text("Scene"),
-		OBS_COMBO_TYPE_EDITABLE,
-		OBS_COMBO_FORMAT_STRING);
-	obs_property_set_long_description(
-		scene,
-		obs_module_text(
-			"SceneDescription"));
+		OBS_COMBO_TYPE_EDITABLE, OBS_COMBO_FORMAT_STRING);
+	obs_property_set_long_description(scene,
+					  obs_module_text("SceneDescription"));
 	obs_enum_scenes(scene_as_transition_list_add_scene, scene);
 	obs_property_set_modified_callback(scene, scene_modified);
 
@@ -295,9 +349,7 @@ obs_properties_t *scene_as_transition_properties(void *data)
 		100.0);
 	obs_property_float_set_suffix(p, " ms");
 	obs_property_set_long_description(
-		p,
-		obs_module_text(
-			"DurationDescription"));
+		p, obs_module_text("DurationDescription"));
 
 	obs_properties_t *transition_point_group = obs_properties_create();
 
@@ -308,12 +360,11 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	p = obs_properties_add_list(transition_point_group, "tp_type",
 				    obs_module_text("TransitionPointType"),
 				    OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
-	obs_property_list_add_int(p, obs_module_text("TransitionPointPercentage"), 0);
+	obs_property_list_add_int(
+		p, obs_module_text("TransitionPointPercentage"), 0);
 	obs_property_list_add_int(p, obs_module_text("TransitionPointTime"), 1);
 	obs_property_set_long_description(
-		p,
-		obs_module_text(
-			"TransitionPointTypeDescription"));
+		p, obs_module_text("TransitionPointTypeDescription"));
 	obs_property_set_modified_callback(p, transition_point_type_modified);
 	p = obs_properties_add_float_slider(transition_point_group,
 					    "transition_point",
@@ -321,9 +372,7 @@ obs_properties_t *scene_as_transition_properties(void *data)
 					    0, 100.0, 1.0);
 	obs_property_float_set_suffix(p, "%");
 	obs_property_set_long_description(
-		p,
-		obs_module_text(
-			"TransitionPointPercentageDescription"));
+		p, obs_module_text("TransitionPointPercentageDescription"));
 
 	p = obs_properties_add_float(transition_point_group,
 				     "transition_point_ms",
@@ -333,15 +382,36 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	obs_property_set_long_description(
 		p, obs_module_text("TransitionPointTimeDescription"));
 
+	obs_properties_t *audio_group = obs_properties_create();
+
+	obs_properties_add_group(props, "audio_group",
+				 obs_module_text("AudioSettings"),
+				 OBS_GROUP_NORMAL, audio_group);
+	obs_property_t *audio_fade_style = obs_properties_add_list(
+		audio_group, "audio_fade_style",
+		obs_module_text("AudioFadeStyle"), OBS_COMBO_TYPE_LIST,
+		OBS_COMBO_FORMAT_INT);
+	obs_property_set_long_description(
+		audio_fade_style, obs_module_text("AudioFadeStyleDescription"));
+	obs_property_list_add_int(audio_fade_style,
+				  obs_module_text("FadeOutFadeIn"), 0);
+	obs_property_list_add_int(audio_fade_style,
+				  obs_module_text("CrossFade"), 1);
+
+	p = obs_properties_add_float_slider(audio_group, "audio_volume",
+					    obs_module_text("AudioVolume"), 0,
+					    100.0, 1.0);
+	obs_property_float_set_suffix(p, "%");
+	obs_property_set_long_description(
+		p, obs_module_text("AudioVolumeDescription"));
+
 	obs_property_t *filter = obs_properties_add_list(
 		props, "filter", obs_module_text("FilterToTrigger"),
 		OBS_COMBO_TYPE_EDITABLE, OBS_COMBO_FORMAT_STRING);
 	obs_property_list_add_string(
 		filter, obs_module_text("NoFilterSelected"), "filter");
 	obs_property_set_long_description(
-		filter,
-		obs_module_text(
-			"FilterToTriggerDescription"));
+		filter, obs_module_text("FilterToTriggerDescription"));
 	obs_source_enum_filters(st->transition_scene,
 				scene_as_transition_list_add_filter, filter);
 
