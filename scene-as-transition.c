@@ -354,7 +354,7 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	obs_properties_t *transition_point_group = obs_properties_create();
 
 	obs_properties_add_group(props, "transition_point_group",
-				 obs_module_text("TransitionPoint"),
+				 obs_module_text("TransitionPointSettings"),
 				 OBS_GROUP_NORMAL, transition_point_group);
 
 	p = obs_properties_add_list(transition_point_group, "tp_type",
