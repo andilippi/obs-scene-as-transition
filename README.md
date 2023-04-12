@@ -15,7 +15,9 @@ Some examples of this plugin will be uploaded for you to get your hands on at [S
 1. You can configure the following '**Scene as Transition Properties**':
     - **Scene** • Select the scene you wish to use as the transition.
     - **Duration** • Set how long you wish the transition to last in milliseconds (ms).
-    - **Transition Point** • Set at which point you want the current scene to switch to the new scene. This is either a **Percentage** or **Time in milliseconds** (ms).
+    - **Transition Point Settings** • Set at which point you want the current scene to switch to the new scene. This is either a **Percentage** or **Time in milliseconds** (ms).
+    - **Audio Fade Style** • Select how the audio from scene A and scene B react during the transition.
+    - **Audio Volume** • Select how loud the audio on the transition scene is.
     - **Filter To Trigger** • Select a filter that is on your selected scene to be enabled when the transition is started.
 
 # Build
