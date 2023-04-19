@@ -1,4 +1,4 @@
-# Scene as Transition for OBS Studio
+# Scene as Transition plugin for OBS Studio
 
 A plugin for OBS Studio that will allow you to use a Scene as a Transition.
 
