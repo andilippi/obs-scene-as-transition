@@ -19,7 +19,6 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_D
 
 target_sources(${PROJECT_NAME} PRIVATE
 	scene-as-transition.c
-	scene-as-transition.h
 	version.h)
 
 if(BUILD_OUT_OF_TREE)
