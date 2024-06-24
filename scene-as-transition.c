@@ -114,6 +114,11 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 		st->mix_a = mix_a_cross_fade;
 		st->mix_b = mix_b_cross_fade;
 	}
+
+	// Ensure transitioning is set to true initially
+	if (!st->transitioning) {
+		st->transitioning = true;
+	}
 }
 
 static void *scene_as_transition_create(obs_data_t *settings,
@@ -124,10 +129,17 @@ static void *scene_as_transition_create(obs_data_t *settings,
 	st = bzalloc(sizeof(*st));
 	st->source = source;
 
+	// Initialize transitioning to true
+	st->transitioning = true;
+
 	obs_transition_enable_fixed(st->source, true, 0);
 	obs_source_update(source, settings);
 
 	scene_as_transition_update(st, settings);
+
+	// Set initial audio mix callbacks
+	st->mix_a = mix_a_fade_in_out;
+	st->mix_b = mix_b_fade_in_out;
 
 	return st;
 }
