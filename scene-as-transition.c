@@ -22,7 +22,7 @@ struct scene_as_transition {
 static const char *scene_as_transition_get_name(void *type_data)
 {
 	UNUSED_PARAMETER(type_data);
-	return obs_module_text("Scene");
+	return obs_module_text("Plugin.Name");
 }
 
 static inline float calc_fade(float t, float mul)
@@ -101,7 +101,7 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 		}
 
 		// Check if a valid filter is selected (not "NoFilterSelected" or empty)
-		const char *no_filter_text = obs_module_text("NoFilterSelected");
+		const char *no_filter_text = obs_module_text("Filter.NoSelection");
 		bool has_valid_filter = filter_name && *filter_name &&
 					strcmp(filter_name, no_filter_text) != 0 &&
 					strcmp(filter_name, "filter") != 0;
@@ -221,7 +221,7 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 
 			// Lazy load filter if it wasn't available during init
 			if (!st->filter && st->filter_name && st->transition_scene) {
-				const char *no_filter_text = obs_module_text("NoFilterSelected");
+				const char *no_filter_text = obs_module_text("Filter.NoSelection");
 				bool has_valid_filter = st->filter_name && *st->filter_name &&
 							strcmp(st->filter_name, no_filter_text) != 0 &&
 							strcmp(st->filter_name, "filter") != 0;
@@ -325,7 +325,7 @@ void scene_as_transition_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, "transition_point", 50.0);
 	obs_data_set_default_double(settings, "transition_point_ms", 500.0);
 	obs_data_set_default_string(settings, "filter",
-				    obs_module_text("NoFilterSelected"));
+				    obs_module_text("Filter.NoSelection"));
 	obs_data_set_default_string(settings, "prev_scene", "");
 	obs_data_set_default_double(settings, "audio_volume", 100.0);
 }
@@ -383,12 +383,12 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 
 		obs_property_list_clear(filter);
 		obs_property_list_add_string(
-			filter, obs_module_text("NoFilterSelected"), "filter");
+			filter, obs_module_text("Filter.NoSelection"), "filter");
 		obs_source_enum_filters(
 			scene, scene_as_transition_list_add_filter, filter);
 
 		obs_data_set_string(settings, "filter",
-				    obs_module_text("NoFilterSelected"));
+				    obs_module_text("Filter.NoSelection"));
 		obs_data_set_string(settings, "prev_scene", scene_name);
 
 		obs_source_release(scene);
@@ -423,81 +423,81 @@ obs_properties_t *scene_as_transition_properties(void *data)
 	obs_properties_t *props = obs_properties_create();
 
 	obs_property_t *scene = obs_properties_add_list(
-		props, "scene", obs_module_text("Scene"),
+		props, "scene", obs_module_text("Scene.Name"),
 		OBS_COMBO_TYPE_EDITABLE, OBS_COMBO_FORMAT_STRING);
 	obs_property_set_long_description(scene,
-					  obs_module_text("SceneDescription"));
+					  obs_module_text("Scene.Description"));
 	obs_enum_scenes(scene_as_transition_list_add_scene, scene);
 	obs_property_set_modified_callback(scene, scene_modified);
 
 	obs_property_t *p = obs_properties_add_float(
-		props, "duration", obs_module_text("Duration"), 0.0, 30000.0,
+		props, "duration", obs_module_text("Transition.Duration"), 0.0, 30000.0,
 		100.0);
 	obs_property_float_set_suffix(p, " ms");
 	obs_property_set_long_description(
-		p, obs_module_text("DurationDescription"));
+		p, obs_module_text("Transition.Duration.Description"));
 
 	obs_properties_t *transition_point_group = obs_properties_create();
 
 	obs_properties_add_group(props, "transition_point_group",
-				 obs_module_text("TransitionPointSettings"),
+				 obs_module_text("TransitionPoint.Settings"),
 				 OBS_GROUP_NORMAL, transition_point_group);
 
 	p = obs_properties_add_list(transition_point_group, "tp_type",
-				    obs_module_text("TransitionPointType"),
+				    obs_module_text("TransitionPoint.Type"),
 				    OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
 	obs_property_list_add_int(
-		p, obs_module_text("TransitionPointPercentage"), 0);
-	obs_property_list_add_int(p, obs_module_text("TransitionPointTime"), 1);
+		p, obs_module_text("TransitionPoint.Percentage"), 0);
+	obs_property_list_add_int(p, obs_module_text("TransitionPoint.Time"), 1);
 	obs_property_set_long_description(
-		p, obs_module_text("TransitionPointTypeDescription"));
+		p, obs_module_text("TransitionPoint.Type.Description"));
 	obs_property_set_modified_callback(p, transition_point_type_modified);
 	p = obs_properties_add_float_slider(transition_point_group,
 					    "transition_point",
-					    obs_module_text("TransitionPoint"),
+					    obs_module_text("TransitionPoint.Name"),
 					    0, 100.0, 1.0);
 	obs_property_float_set_suffix(p, "%");
 	obs_property_set_long_description(
-		p, obs_module_text("TransitionPointPercentageDescription"));
+		p, obs_module_text("TransitionPoint.Percentage.Description"));
 
 	p = obs_properties_add_float(transition_point_group,
 				     "transition_point_ms",
-				     obs_module_text("TransitionPoint"), 0,
+				     obs_module_text("TransitionPoint.Name"), 0,
 				     30000.0, 100.0);
 	obs_property_float_set_suffix(p, " ms");
 	obs_property_set_long_description(
-		p, obs_module_text("TransitionPointTimeDescription"));
+		p, obs_module_text("TransitionPoint.Time.Description"));
 
 	obs_properties_t *audio_group = obs_properties_create();
 
 	obs_properties_add_group(props, "audio_group",
-				 obs_module_text("AudioSettings"),
+				 obs_module_text("Audio.Settings"),
 				 OBS_GROUP_NORMAL, audio_group);
 	obs_property_t *audio_fade_style = obs_properties_add_list(
 		audio_group, "audio_fade_style",
-		obs_module_text("AudioFadeStyle"), OBS_COMBO_TYPE_LIST,
+		obs_module_text("Audio.FadeStyle"), OBS_COMBO_TYPE_LIST,
 		OBS_COMBO_FORMAT_INT);
 	obs_property_set_long_description(
-		audio_fade_style, obs_module_text("AudioFadeStyleDescription"));
+		audio_fade_style, obs_module_text("Audio.FadeStyle.Description"));
 	obs_property_list_add_int(audio_fade_style,
-				  obs_module_text("FadeOutFadeIn"), 0);
+				  obs_module_text("Audio.FadeStyle.FadeOutIn"), 0);
 	obs_property_list_add_int(audio_fade_style,
-				  obs_module_text("CrossFade"), 1);
+				  obs_module_text("Audio.FadeStyle.CrossFade"), 1);
 
 	p = obs_properties_add_float_slider(audio_group, "audio_volume",
-					    obs_module_text("AudioVolume"), 0,
+					    obs_module_text("Audio.Volume"), 0,
 					    100.0, 1.0);
 	obs_property_float_set_suffix(p, "%");
 	obs_property_set_long_description(
-		p, obs_module_text("AudioVolumeDescription"));
+		p, obs_module_text("Audio.Volume.Description"));
 
 	obs_property_t *filter = obs_properties_add_list(
-		props, "filter", obs_module_text("FilterToTrigger"),
+		props, "filter", obs_module_text("Filter.ToTrigger"),
 		OBS_COMBO_TYPE_EDITABLE, OBS_COMBO_FORMAT_STRING);
 	obs_property_list_add_string(
-		filter, obs_module_text("NoFilterSelected"), "filter");
+		filter, obs_module_text("Filter.NoSelection"), "filter");
 	obs_property_set_long_description(
-		filter, obs_module_text("FilterToTriggerDescription"));
+		filter, obs_module_text("Filter.ToTrigger.Description"));
 	obs_source_enum_filters(st->transition_scene,
 				scene_as_transition_list_add_filter, filter);
 
@@ -534,12 +534,12 @@ OBS_MODULE_AUTHOR("Andi Stone")
 OBS_MODULE_USE_DEFAULT_LOCALE("scene-as-transition", "en-US")
 MODULE_EXPORT const char *obs_module_description(void)
 {
-	return obs_module_text("Description");
+	return obs_module_text("Plugin.Description");
 }
 
 MODULE_EXPORT const char *obs_module_name(void)
 {
-	return obs_module_text("SceneAsTransition");
+	return obs_module_text("Plugin.Name");
 }
 
 bool obs_module_load(void)
