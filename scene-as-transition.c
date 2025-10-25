@@ -11,7 +11,7 @@ struct scene_as_transition {
 	bool transitioning;
 	float transition_point;
 	float duration;
-	const char *filter_name;
+	char *filter_name;
 
 	obs_transition_audio_mix_callback_t mix_a;
 	obs_transition_audio_mix_callback_t mix_b;
@@ -82,6 +82,11 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 
 	const char *filter_name = obs_data_get_string(settings, "filter");
 
+	// Store filter name for lazy loading
+	if (st->filter_name)
+		bfree(st->filter_name);
+	st->filter_name = bstrdup(filter_name);
+
 	if (st->filter)
 		obs_source_release(st->filter);
 
@@ -148,6 +153,10 @@ static void scene_as_transition_destroy(void *data)
 {
 	struct scene_as_transition *st = data;
 	obs_source_release(st->transition_scene);
+	if (st->filter)
+		obs_source_release(st->filter);
+	if (st->filter_name)
+		bfree(st->filter_name);
 	bfree(data);
 }
 
@@ -175,6 +184,13 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 				obs_source_inc_showing(st->transition_scene);
 			if (obs_source_active(st->source))
 				obs_source_inc_active(st->transition_scene);
+
+			// Lazy load filter if it wasn't available during init
+			if (!st->filter && st->filter_name && st->transition_scene) {
+				st->filter = obs_source_get_filter_by_name(
+					st->transition_scene, st->filter_name);
+			}
+
 			if (st->filter)
 				obs_source_set_enabled(st->filter, true);
 		}
