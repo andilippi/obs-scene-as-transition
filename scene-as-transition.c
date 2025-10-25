@@ -58,6 +58,8 @@ static float mix_b_cross_fade(void *data, float t)
 void scene_as_transition_update(void *data, obs_data_t *settings)
 {
 	struct scene_as_transition *st = data;
+	if (!st)
+		return;
 
 	obs_source_release(st->transition_scene);
 	st->transition_scene =
@@ -82,16 +84,43 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 
 	const char *filter_name = obs_data_get_string(settings, "filter");
 
+	// Check if filter name has changed to avoid unnecessary re-fetching
+	bool filter_name_changed = !st->filter_name ||
+				   strcmp(st->filter_name, filter_name) != 0;
+
 	// Store filter name for lazy loading
-	if (st->filter_name)
-		bfree(st->filter_name);
-	st->filter_name = bstrdup(filter_name);
+	if (filter_name_changed) {
+		if (st->filter_name)
+			bfree(st->filter_name);
+		st->filter_name = bstrdup(filter_name);
 
-	if (st->filter)
-		obs_source_release(st->filter);
+		// Release existing filter only if name changed
+		if (st->filter) {
+			obs_source_release(st->filter);
+			st->filter = NULL;
+		}
 
-	st->filter = obs_source_get_filter_by_name(st->transition_scene,
-						   filter_name);
+		// Check if a valid filter is selected (not "NoFilterSelected" or empty)
+		const char *no_filter_text = obs_module_text("NoFilterSelected");
+		bool has_valid_filter = filter_name && *filter_name &&
+					strcmp(filter_name, no_filter_text) != 0 &&
+					strcmp(filter_name, "filter") != 0;
+
+		if (has_valid_filter && st->transition_scene) {
+			st->filter = obs_source_get_filter_by_name(st->transition_scene,
+								   filter_name);
+			if (!st->filter) {
+				blog(LOG_WARNING,
+				     "[Scene As Transition] Failed to find filter '%s' on scene '%s'. "
+				     "Filter may not be loaded yet and will be retried during transition.",
+				     filter_name, obs_source_get_name(st->transition_scene));
+			} else {
+				blog(LOG_INFO,
+				     "[Scene As Transition] Successfully loaded filter '%s' from scene '%s'",
+				     filter_name, obs_source_get_name(st->transition_scene));
+			}
+		}
+	}
 
 	st->transition_a_mul = (1.0f / st->transition_point);
 	st->transition_b_mul = (1.0f / (1.0f - st->transition_point));
@@ -164,6 +193,11 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 {
 	struct scene_as_transition *st = data;
 
+	// NULL safety check
+	if (!st || !st->transition_scene) {
+		return;
+	}
+
 	float t = obs_transition_get_time(st->source);
 	bool use_a = t < st->transition_point;
 
@@ -187,8 +221,28 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 
 			// Lazy load filter if it wasn't available during init
 			if (!st->filter && st->filter_name && st->transition_scene) {
-				st->filter = obs_source_get_filter_by_name(
-					st->transition_scene, st->filter_name);
+				const char *no_filter_text = obs_module_text("NoFilterSelected");
+				bool has_valid_filter = st->filter_name && *st->filter_name &&
+							strcmp(st->filter_name, no_filter_text) != 0 &&
+							strcmp(st->filter_name, "filter") != 0;
+
+				if (has_valid_filter) {
+					st->filter = obs_source_get_filter_by_name(
+						st->transition_scene, st->filter_name);
+					if (st->filter) {
+						blog(LOG_INFO,
+						     "[Scene As Transition] Lazy loading succeeded: "
+						     "Found filter '%s' on scene '%s'",
+						     st->filter_name,
+						     obs_source_get_name(st->transition_scene));
+					} else {
+						blog(LOG_WARNING,
+						     "[Scene As Transition] Lazy loading failed: "
+						     "Filter '%s' still not found on scene '%s'",
+						     st->filter_name,
+						     obs_source_get_name(st->transition_scene));
+					}
+				}
 			}
 
 			if (st->filter)
@@ -201,6 +255,10 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 			obs_source_dec_active(st->transition_scene);
 		if (obs_source_showing(st->source))
 			obs_source_dec_showing(st->transition_scene);
+
+		// Disable filter when transition ends
+		if (st->filter)
+			obs_source_set_enabled(st->filter, false);
 	}
 
 	UNUSED_PARAMETER(effect);
@@ -212,7 +270,7 @@ static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
 					     size_t sample_rate)
 {
 	struct scene_as_transition *st = data;
-	if (!st)
+	if (!st || !st->transition_scene)
 		return false;
 
 	uint64_t ts = 0;
