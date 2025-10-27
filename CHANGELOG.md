@@ -1,9 +1,8 @@
 # Scene As Transition - Changelog
 
-## v2.0.0 (26 Oct '25)
-**Patch Focus:** Update to OBS 32
-- Fixed filter not loading issue
-- Moved locale to new type system
+## v1.2.0 (26 Oct '25)
+**Patch Focus:** OBS 32 compatibility & filter reliability
+- Fixed cases where the transition filter failed to load by adding lazy-loading and null-safety guards
 - Updated to work with OBS 32
 
 ---
