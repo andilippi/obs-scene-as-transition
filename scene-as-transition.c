@@ -1,5 +1,13 @@
 #include "obs-module.h"
 #include "version.h"
+#include <util/platform.h>
+#include <util/dstr.h>
+#include <obs-frontend-api.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 #define LOG_OFFSET_DB 6.0f
 #define LOG_RANGE_DB 96.0f
@@ -111,12 +119,12 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 								   filter_name);
 			if (!st->filter) {
 				blog(LOG_WARNING,
-				     "[Scene As Transition] Failed to find filter '%s' on scene '%s'. "
+				     "[StreamUP Scene as Transition] Failed to find filter '%s' on scene '%s'. "
 				     "Filter may not be loaded yet and will be retried during transition.",
 				     filter_name, obs_source_get_name(st->transition_scene));
 			} else {
 				blog(LOG_INFO,
-				     "[Scene As Transition] Successfully loaded filter '%s' from scene '%s'",
+				     "[StreamUP Scene as Transition] Successfully loaded filter '%s' from scene '%s'",
 				     filter_name, obs_source_get_name(st->transition_scene));
 			}
 		}
@@ -231,13 +239,13 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 						st->transition_scene, st->filter_name);
 					if (st->filter) {
 						blog(LOG_INFO,
-						     "[Scene As Transition] Lazy loading succeeded: "
+						     "[StreamUP Scene as Transition] Lazy loading succeeded: "
 						     "Found filter '%s' on scene '%s'",
 						     st->filter_name,
 						     obs_source_get_name(st->transition_scene));
 					} else {
 						blog(LOG_WARNING,
-						     "[Scene As Transition] Lazy loading failed: "
+						     "[StreamUP Scene as Transition] Lazy loading failed: "
 						     "Filter '%s' still not found on scene '%s'",
 						     st->filter_name,
 						     obs_source_get_name(st->transition_scene));
@@ -542,10 +550,216 @@ MODULE_EXPORT const char *obs_module_name(void)
 	return obs_module_text("Plugin.Name");
 }
 
+static void open_folder_and_highlight(const char *file_path)
+{
+#ifdef _WIN32
+	// Convert forward slashes to backslashes for Windows
+	struct dstr windows_path = {0};
+	dstr_copy(&windows_path, file_path);
+	dstr_replace(&windows_path, "/", "\\");
+
+	// Build the explorer command to select the file
+	struct dstr command = {0};
+	dstr_printf(&command, "/select,\"%s\"", windows_path.array);
+
+	// Open explorer and highlight the file
+	ShellExecuteA(NULL, "open", "explorer.exe", command.array, NULL,
+		      SW_SHOWNORMAL);
+
+	dstr_free(&command);
+	dstr_free(&windows_path);
+#elif __APPLE__
+	// macOS: Use 'open -R' to reveal in Finder
+	struct dstr command = {0};
+	dstr_printf(&command, "open -R \"%s\"", file_path);
+	system(command.array);
+	dstr_free(&command);
+#else
+	// Linux: Open the parent directory
+	struct dstr dir_path = {0};
+	dstr_copy(&dir_path, file_path);
+	char *last_slash = strrchr(dir_path.array, '/');
+	if (last_slash) {
+		*last_slash = '\0';
+		struct dstr command = {0};
+		dstr_printf(&command, "xdg-open \"%s\"", dir_path.array);
+		system(command.array);
+		dstr_free(&command);
+	}
+	dstr_free(&dir_path);
+#endif
+}
+
+struct old_plugin_check_data {
+	char *old_plugin_path;
+};
+
+static void show_old_plugin_dialog(void *data)
+{
+	struct old_plugin_check_data *check_data = data;
+	if (!check_data || !check_data->old_plugin_path)
+		return;
+
+#ifdef _WIN32
+	// Create message for the dialog
+	struct dstr message = {0};
+	dstr_printf(&message,
+		    "An old version of Scene as Transition has been detected:\n\n"
+		    "%s\n\n"
+		    "This old version may cause conflicts with the new StreamUP Scene as Transition plugin.\n\n"
+		    "Would you like to open the plugins folder to remove it?",
+		    check_data->old_plugin_path);
+
+	// Show message box with Yes/No buttons
+	int result = MessageBoxA(NULL, message.array,
+				 "StreamUP Scene as Transition - Old Plugin Detected",
+				 MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
+
+	if (result == IDYES) {
+		open_folder_and_highlight(check_data->old_plugin_path);
+	}
+
+	dstr_free(&message);
+#else
+	// For non-Windows, just open the folder
+	open_folder_and_highlight(check_data->old_plugin_path);
+#endif
+
+	// Clean up
+	bfree(check_data->old_plugin_path);
+	bfree(check_data);
+}
+
+static void find_old_plugin_files(struct dstr *found_path)
+{
+	// Get the binary module path
+	const char *bin_path = obs_get_module_binary_path(obs_current_module());
+	if (!bin_path) {
+		blog(LOG_INFO,
+		     "[StreamUP Scene as Transition] Unable to get module binary path");
+		return;
+	}
+
+	blog(LOG_INFO,
+	     "[StreamUP Scene as Transition] Current module binary path: %s",
+	     bin_path);
+
+	struct dstr plugin_dir = {0};
+	dstr_init_copy(&plugin_dir, bin_path);
+
+	// Navigate to the plugins directory
+	char *last_slash = strrchr(plugin_dir.array, '/');
+	if (!last_slash)
+		last_slash = strrchr(plugin_dir.array, '\\');
+
+	if (!last_slash) {
+		blog(LOG_INFO,
+		     "[StreamUP Scene as Transition] Unable to determine plugin directory");
+		dstr_free(&plugin_dir);
+		return;
+	}
+
+	// Truncate to directory
+	dstr_resize(&plugin_dir, last_slash - plugin_dir.array + 1);
+
+	blog(LOG_INFO,
+	     "[StreamUP Scene as Transition] Checking for old plugin in: %s",
+	     plugin_dir.array);
+
+	// List of possible old plugin names to check
+	const char *old_plugin_names[] = {"scene-as-transition.dll",
+					  "obs-scene-as-transition.dll",
+					  "SceneAsTransition.dll", NULL};
+
+	struct dstr old_plugin_path = {0};
+
+	for (int i = 0; old_plugin_names[i] != NULL; i++) {
+		dstr_copy(&old_plugin_path, plugin_dir.array);
+		dstr_cat(&old_plugin_path, old_plugin_names[i]);
+
+		blog(LOG_INFO,
+		     "[StreamUP Scene as Transition] Checking for: %s",
+		     old_plugin_path.array);
+
+		if (os_file_exists(old_plugin_path.array)) {
+			dstr_copy(found_path, old_plugin_path.array);
+			blog(LOG_INFO,
+			     "[StreamUP Scene as Transition] Found old plugin file at: %s",
+			     old_plugin_path.array);
+			dstr_free(&old_plugin_path);
+			dstr_free(&plugin_dir);
+			return;
+		}
+	}
+
+	blog(LOG_INFO,
+	     "[StreamUP Scene as Transition] No old plugin file found in binary directory");
+
+	dstr_free(&old_plugin_path);
+	dstr_free(&plugin_dir);
+}
+
+static void check_for_old_plugin(void)
+{
+	// First check if the source is already registered (indicates old plugin is loaded)
+	const char *source_id = "scene_as_transition";
+	bool source_already_exists = false;
+
+	// Try to get the source output flags - if the source type is registered, this returns non-zero
+	uint32_t flags = obs_get_source_output_flags(source_id);
+	if (flags != 0) {
+		source_already_exists = true;
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] =========================================");
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] OLD PLUGIN DETECTED!");
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] The source ID '%s' is already registered.",
+		     source_id);
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] This indicates the old 'Scene As Transition' plugin");
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] is currently loaded and must be removed.");
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] =========================================");
+	}
+
+	// Try to find the actual file
+	struct dstr old_plugin_path = {0};
+	find_old_plugin_files(&old_plugin_path);
+
+	// Show dialog if we detected the old plugin
+	if (source_already_exists) {
+		struct old_plugin_check_data *check_data =
+			bzalloc(sizeof(struct old_plugin_check_data));
+
+		// Use the found file path if available, otherwise just indicate we found it
+		if (!dstr_is_empty(&old_plugin_path)) {
+			check_data->old_plugin_path =
+				bstrdup(old_plugin_path.array);
+		} else {
+			// We know it's loaded but couldn't find the file
+			// Provide a generic message
+			check_data->old_plugin_path = bstrdup(
+				"Old plugin is loaded but file location could not be determined");
+		}
+
+		// Queue task to show dialog on UI thread
+		obs_queue_task(OBS_TASK_UI, show_old_plugin_dialog, check_data,
+			       false);
+	}
+
+	dstr_free(&old_plugin_path);
+}
+
 bool obs_module_load(void)
 {
-	blog(LOG_INFO, "[Scene As Transition] loaded version %s",
+	blog(LOG_INFO, "[StreamUP Scene as Transition] loaded version %s",
 	     PROJECT_VERSION);
+
+	// Check for old plugin version
+	check_for_old_plugin();
+
 	obs_register_source(&scene_as_transition);
 	return true;
 }
