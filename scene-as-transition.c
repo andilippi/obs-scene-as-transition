@@ -572,7 +572,11 @@ static void open_folder_and_highlight(const char *file_path)
 	// macOS: Use 'open -R' to reveal in Finder
 	struct dstr command = {0};
 	dstr_printf(&command, "open -R \"%s\"", file_path);
-	system(command.array);
+	int result = system(command.array);
+	if (result != 0) {
+		blog(LOG_WARNING,
+		     "[StreamUP Scene as Transition] Failed to open Finder");
+	}
 	dstr_free(&command);
 #else
 	// Linux: Open the parent directory
@@ -583,7 +587,11 @@ static void open_folder_and_highlight(const char *file_path)
 		*last_slash = '\0';
 		struct dstr command = {0};
 		dstr_printf(&command, "xdg-open \"%s\"", dir_path.array);
-		system(command.array);
+		int result = system(command.array);
+		if (result != 0) {
+			blog(LOG_WARNING,
+			     "[StreamUP Scene as Transition] Failed to open file manager");
+		}
 		dstr_free(&command);
 	}
 	dstr_free(&dir_path);
