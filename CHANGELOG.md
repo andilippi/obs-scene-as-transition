@@ -1,5 +1,14 @@
 # Scene As Transition - Changelog
 
+## v1.2.1 (28 Oct '25)
+**Patch Focus:** Old plugin detection and branding update
+- Added automatic detection of old scene-as-transition.dll file
+- Displays warning popup with option to open plugins folder and highlight old file for removal
+- Updated plugin log name to "StreamUP Scene as Transition"
+- Improved compatibility checks to prevent conflicts with legacy versions
+
+---
+
 ## v1.2.0 (26 Oct '25)
 **Patch Focus:** OBS 32 compatibility & filter reliability
 - Fixed cases where the transition filter failed to load by adding lazy-loading and null-safety guards
