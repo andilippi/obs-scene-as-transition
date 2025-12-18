@@ -1,5 +1,37 @@
 # Scene As Transition - Changelog
 
+## v1.2.2 (19 Dec '25)
+**Patch Focus:** Code quality, security fixes, CI/CD improvements, and Flatpak support
+
+### New Features
+- Added Flatpak build support for Linux users running OBS via Flatpak
+- Added Flatpak manifest (`com.obsproject.Studio.Plugin.SceneAsTransition.json`)
+- Added Flatpak build job to CI/CD pipeline
+
+### Code Fixes
+- Fixed potential division by zero when transition point is set to 0% or 100%
+- Fixed potential crash when transition scene is not set (NULL pointer dereference)
+- Fixed command injection vulnerability in file manager open functions (macOS/Linux)
+- Fixed render path logging causing potential performance issues (now logs only once per filter change)
+- Removed redundant code and duplicate initializations
+- Added consistent NULL safety checks throughout
+- Added `static` keyword to internal functions for better encapsulation
+- Extracted duplicate filter validation logic into helper function
+- Removed deprecated `register` keyword from audio processing
+- Added platform-specific file extensions for old plugin detection (`.so` for macOS/Linux)
+
+### CI/CD Fixes
+- Fixed missing `$` in `CODESIGN_IDENT_USER` variable (macOS notarization)
+- Fixed wrong variable name in Ubuntu packaging (`build_args` → `package_args`)
+- Fixed undefined `$ProductName` variable in Windows build script
+- Fixed inconsistent Zsh version requirements across build scripts
+- Removed hardcoded Xcode version selection (uses runner default)
+- Removed duplicate zsh installation in packaging step
+- Removed dead code (empty `unwanted_formulas` loop, unused `$Columns` variable)
+- Added TODO comments to disabled format checks
+
+---
+
 ## v1.2.1 (28 Oct '25)
 **Patch Focus:** Old plugin detection and branding update
 - Added automatic detection of old scene-as-transition.dll file

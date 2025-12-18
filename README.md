@@ -31,6 +31,13 @@ Some examples of this plugin will be uploaded for you to get your hands on at [S
     - Verify that you have package with development files for OBS
     - Check out this repository and run `cmake -S . -B build -DBUILD_OUT_OF_TREE=On && cmake --build build`
 
+1. Flatpak build (Linux)
+    - Install flatpak-builder: `sudo apt install flatpak-builder` or equivalent
+    - Add Flathub repo: `flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo`
+    - Install OBS Studio Flatpak: `flatpak install flathub com.obsproject.Studio`
+    - Build the plugin: `flatpak-builder --user --install build-flatpak com.obsproject.Studio.Plugin.SceneAsTransition.json`
+    - The plugin will be available when running OBS Studio via Flatpak
+
 # Support
 - [**Patreon**](https://www.patreon.com/Andilippi) - Get access to all my products and more exclusive perks
 - [**Ko-Fi**](https://ko-fi.com/andilippi) - Get access to all my products and more exclusive perks
