@@ -7,6 +7,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <unistd.h>
 #endif
 
 #define LOG_OFFSET_DB 6.0f
@@ -20,12 +22,22 @@ struct scene_as_transition {
 	float transition_point;
 	float duration;
 	char *filter_name;
+	bool filter_load_logged; // Prevent log spam in render path
 
 	obs_transition_audio_mix_callback_t mix_a;
 	obs_transition_audio_mix_callback_t mix_b;
 	float transition_a_mul;
 	float transition_b_mul;
 };
+
+static inline bool is_valid_filter_name(const char *filter_name)
+{
+	if (!filter_name || !*filter_name)
+		return false;
+	const char *no_filter_text = obs_module_text("Filter.NoSelection");
+	return strcmp(filter_name, no_filter_text) != 0 &&
+	       strcmp(filter_name, "filter") != 0;
+}
 
 static const char *scene_as_transition_get_name(void *type_data)
 {
@@ -63,7 +75,7 @@ static float mix_b_cross_fade(void *data, float t)
 	return t;
 }
 
-void scene_as_transition_update(void *data, obs_data_t *settings)
+static void scene_as_transition_update(void *data, obs_data_t *settings)
 {
 	struct scene_as_transition *st = data;
 	if (!st)
@@ -101,6 +113,7 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 		if (st->filter_name)
 			bfree(st->filter_name);
 		st->filter_name = bstrdup(filter_name);
+		st->filter_load_logged = false; // Reset log flag for new filter
 
 		// Release existing filter only if name changed
 		if (st->filter) {
@@ -108,13 +121,7 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 			st->filter = NULL;
 		}
 
-		// Check if a valid filter is selected (not "NoFilterSelected" or empty)
-		const char *no_filter_text = obs_module_text("Filter.NoSelection");
-		bool has_valid_filter = filter_name && *filter_name &&
-					strcmp(filter_name, no_filter_text) != 0 &&
-					strcmp(filter_name, "filter") != 0;
-
-		if (has_valid_filter && st->transition_scene) {
+		if (is_valid_filter_name(filter_name) && st->transition_scene) {
 			st->filter = obs_source_get_filter_by_name(st->transition_scene,
 								   filter_name);
 			if (!st->filter) {
@@ -130,8 +137,14 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 		}
 	}
 
-	st->transition_a_mul = (1.0f / st->transition_point);
-	st->transition_b_mul = (1.0f / (1.0f - st->transition_point));
+	// Clamp transition_point to avoid division by zero
+	float tp = st->transition_point;
+	if (tp < 0.001f)
+		tp = 0.001f;
+	else if (tp > 0.999f)
+		tp = 0.999f;
+	st->transition_a_mul = (1.0f / tp);
+	st->transition_b_mul = (1.0f / (1.0f - tp));
 
 	float def =
 		(float)obs_data_get_double(settings, "audio_volume") / 100.0f;
@@ -147,7 +160,8 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 				  -def) +
 		     LOG_OFFSET_DB;
 	const float mul = obs_db_to_mul(db);
-	obs_source_set_volume(st->transition_scene, mul);
+	if (st->transition_scene)
+		obs_source_set_volume(st->transition_scene, mul);
 
 	if (!obs_data_get_int(settings, "audio_fade_style")) {
 		st->mix_a = mix_a_fade_in_out;
@@ -155,11 +169,6 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 	} else {
 		st->mix_a = mix_a_cross_fade;
 		st->mix_b = mix_b_cross_fade;
-	}
-
-	// Ensure transitioning is set to true initially
-	if (!st->transitioning) {
-		st->transitioning = true;
 	}
 }
 
@@ -179,22 +188,19 @@ static void *scene_as_transition_create(obs_data_t *settings,
 
 	scene_as_transition_update(st, settings);
 
-	// Set initial audio mix callbacks
-	st->mix_a = mix_a_fade_in_out;
-	st->mix_b = mix_b_fade_in_out;
-
 	return st;
 }
 
 static void scene_as_transition_destroy(void *data)
 {
 	struct scene_as_transition *st = data;
-	obs_source_release(st->transition_scene);
+	if (st->transition_scene)
+		obs_source_release(st->transition_scene);
 	if (st->filter)
 		obs_source_release(st->filter);
 	if (st->filter_name)
 		bfree(st->filter_name);
-	bfree(data);
+	bfree(st);
 }
 
 static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
@@ -228,29 +234,24 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 				obs_source_inc_active(st->transition_scene);
 
 			// Lazy load filter if it wasn't available during init
-			if (!st->filter && st->filter_name && st->transition_scene) {
-				const char *no_filter_text = obs_module_text("Filter.NoSelection");
-				bool has_valid_filter = st->filter_name && *st->filter_name &&
-							strcmp(st->filter_name, no_filter_text) != 0 &&
-							strcmp(st->filter_name, "filter") != 0;
-
-				if (has_valid_filter) {
-					st->filter = obs_source_get_filter_by_name(
-						st->transition_scene, st->filter_name);
-					if (st->filter) {
-						blog(LOG_INFO,
-						     "[StreamUP Scene as Transition] Lazy loading succeeded: "
-						     "Found filter '%s' on scene '%s'",
-						     st->filter_name,
-						     obs_source_get_name(st->transition_scene));
-					} else {
-						blog(LOG_WARNING,
-						     "[StreamUP Scene as Transition] Lazy loading failed: "
-						     "Filter '%s' still not found on scene '%s'",
-						     st->filter_name,
-						     obs_source_get_name(st->transition_scene));
-					}
+			if (!st->filter && st->transition_scene && !st->filter_load_logged &&
+			    is_valid_filter_name(st->filter_name)) {
+				st->filter = obs_source_get_filter_by_name(
+					st->transition_scene, st->filter_name);
+				if (st->filter) {
+					blog(LOG_INFO,
+					     "[StreamUP Scene as Transition] Lazy loading succeeded: "
+					     "Found filter '%s' on scene '%s'",
+					     st->filter_name,
+					     obs_source_get_name(st->transition_scene));
+				} else {
+					blog(LOG_WARNING,
+					     "[StreamUP Scene as Transition] Lazy loading failed: "
+					     "Filter '%s' still not found on scene '%s'",
+					     st->filter_name,
+					     obs_source_get_name(st->transition_scene));
 				}
+				st->filter_load_logged = true; // Only log once per filter change
 			}
 
 			if (st->filter)
@@ -305,9 +306,9 @@ static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
 			continue;
 
 		for (size_t ch = 0; ch < channels; ch++) {
-			register float *out = audio->output[mix].data[ch];
-			register float *in = child_audio.output[mix].data[ch];
-			register float *end = in + AUDIO_OUTPUT_FRAMES;
+			float *out = audio->output[mix].data[ch];
+			float *in = child_audio.output[mix].data[ch];
+			float *end = in + AUDIO_OUTPUT_FRAMES;
 
 			while (in < end)
 				*(out++) += *(in++);
@@ -327,7 +328,7 @@ static enum gs_color_space scene_as_transition_video_get_color_space(
 	return obs_transition_video_get_color_space(st->source);
 }
 
-void scene_as_transition_defaults(obs_data_t *settings)
+static void scene_as_transition_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_double(settings, "duration", 1000.0);
 	obs_data_set_default_double(settings, "transition_point", 50.0);
@@ -360,8 +361,8 @@ static bool transition_point_type_modified(obs_properties_t *ppts,
 	return true;
 }
 
-bool scene_as_transition_list_add_scene(void *data,
-					obs_source_t *transition_scene)
+static bool scene_as_transition_list_add_scene(void *data,
+					       obs_source_t *transition_scene)
 {
 	obs_property_t *prop = data;
 	const char *name = obs_source_get_name(transition_scene);
@@ -369,8 +370,8 @@ bool scene_as_transition_list_add_scene(void *data,
 	return true;
 }
 
-void scene_as_transition_list_add_filter(obs_source_t *parent,
-					 obs_source_t *child, void *data)
+static void scene_as_transition_list_add_filter(obs_source_t *parent,
+						obs_source_t *child, void *data)
 {
 	UNUSED_PARAMETER(parent);
 	obs_property_t *p = data;
@@ -423,7 +424,7 @@ static void scene_as_transition_enum_all_sources(
 		enum_callback(st->source, st->transition_scene, param);
 }
 
-obs_properties_t *scene_as_transition_properties(void *data)
+static obs_properties_t *scene_as_transition_properties(void *data)
 {
 
 	struct scene_as_transition *st = data;
@@ -515,8 +516,6 @@ obs_properties_t *scene_as_transition_properties(void *data)
 		") by Andi Stone ( <a href=\"https://www.youtube.com/andilippi\">Andilippi</a> ) | A <a href=\"https://streamup.tips\">StreamUP</a> Product",
 		OBS_TEXT_INFO);
 
-	UNUSED_PARAMETER(data);
-
 	return props;
 }
 
@@ -569,30 +568,33 @@ static void open_folder_and_highlight(const char *file_path)
 	dstr_free(&command);
 	dstr_free(&windows_path);
 #elif __APPLE__
-	// macOS: Use 'open -R' to reveal in Finder
-	struct dstr command = {0};
-	dstr_printf(&command, "open -R \"%s\"", file_path);
-	int result = system(command.array);
-	if (result != 0) {
+	// macOS: Use 'open -R' to reveal in Finder (using fork/exec to avoid shell injection)
+	pid_t pid = fork();
+	if (pid == 0) {
+		// Child process
+		execlp("open", "open", "-R", file_path, (char *)NULL);
+		_exit(1); // Only reached if exec fails
+	} else if (pid < 0) {
 		blog(LOG_WARNING,
-		     "[StreamUP Scene as Transition] Failed to open Finder");
+		     "[StreamUP Scene as Transition] Failed to fork for Finder");
 	}
-	dstr_free(&command);
+	// Parent continues (no need to wait)
 #else
-	// Linux: Open the parent directory
+	// Linux: Open the parent directory (using fork/exec to avoid shell injection)
 	struct dstr dir_path = {0};
 	dstr_copy(&dir_path, file_path);
 	char *last_slash = strrchr(dir_path.array, '/');
 	if (last_slash) {
 		*last_slash = '\0';
-		struct dstr command = {0};
-		dstr_printf(&command, "xdg-open \"%s\"", dir_path.array);
-		int result = system(command.array);
-		if (result != 0) {
+		pid_t pid = fork();
+		if (pid == 0) {
+			// Child process
+			execlp("xdg-open", "xdg-open", dir_path.array, (char *)NULL);
+			_exit(1); // Only reached if exec fails
+		} else if (pid < 0) {
 			blog(LOG_WARNING,
-			     "[StreamUP Scene as Transition] Failed to open file manager");
+			     "[StreamUP Scene as Transition] Failed to fork for file manager");
 		}
-		dstr_free(&command);
 	}
 	dstr_free(&dir_path);
 #endif
@@ -674,10 +676,20 @@ static void find_old_plugin_files(struct dstr *found_path)
 	     "[StreamUP Scene as Transition] Checking for old plugin in: %s",
 	     plugin_dir.array);
 
-	// List of possible old plugin names to check
+	// List of possible old plugin names to check (platform-specific)
+#ifdef _WIN32
 	const char *old_plugin_names[] = {"scene-as-transition.dll",
 					  "obs-scene-as-transition.dll",
 					  "SceneAsTransition.dll", NULL};
+#elif __APPLE__
+	const char *old_plugin_names[] = {"scene-as-transition.so",
+					  "obs-scene-as-transition.so",
+					  "SceneAsTransition.so", NULL};
+#else
+	const char *old_plugin_names[] = {"scene-as-transition.so",
+					  "obs-scene-as-transition.so",
+					  "SceneAsTransition.so", NULL};
+#endif
 
 	struct dstr old_plugin_path = {0};
 
