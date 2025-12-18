@@ -69,16 +69,14 @@ runs:
 
         .github/scripts/package-macos ${package_args}
 
-    - name: Install Dependencies 🛍️
+    - name: Set Up Environment 🔧
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        : Install Dependencies 🛍️
-        echo ::group::Install Dependencies
+        : Set Up Environment 🔧
+        # zsh already installed by build-plugin, just set up PATH
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
-        brew install --quiet zsh
-        echo ::endgroup::
 
     - name: Run Ubuntu Packaging
       if: runner.os == 'Linux'
@@ -90,7 +88,7 @@ runs:
           --target ubuntu-${{ inputs.target }}
           --config ${{ inputs.config }}
         )
-        if (( ${+RUNNER_DEBUG} )) build_args+=(--debug)
+        if (( ${+RUNNER_DEBUG} )) package_args+=(--debug)
 
         if [[ '${{ inputs.package }}' == 'true' ]] package_args+=(--package)
 

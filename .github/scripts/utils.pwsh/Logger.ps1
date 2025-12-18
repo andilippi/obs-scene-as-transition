@@ -145,5 +145,3 @@ function Log-Output {
         }
     }
 }
-
-$Columns = (Get-Host).UI.RawUI.WindowSize.Width - 5

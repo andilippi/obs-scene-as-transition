@@ -3,6 +3,7 @@ on:
   workflow_call:
 jobs:
   clang-format:
+    # TODO: Enable clang-format check when project formatting is standardized
     if: false
     runs-on: ubuntu-24.04
     steps:
@@ -16,8 +17,9 @@ jobs:
           failCondition: error
 
   gersemi:
-    runs-on: ubuntu-24.04
+    # TODO: Enable gersemi (CMake formatter) check when CMake formatting is standardized
     if: false
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
