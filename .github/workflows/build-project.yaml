@@ -90,20 +90,6 @@ jobs:
           : Set Up Environment 🔧
           if (( ${+RUNNER_DEBUG} )) setopt XTRACE
 
-          print '::group::Enable Xcode 16.1'
-          sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
-          print '::endgroup::'
-
-          print '::group::Clean Homebrew Environment'
-          local -a unwanted_formulas=()
-          local -a remove_formulas=()
-          for formula (${unwanted_formulas}) {
-            if [[ -d ${HOMEBREW_PREFIX}/Cellar/${formula} ]] remove_formulas+=(${formula})
-          }
-
-          if (( #remove_formulas )) brew uninstall --ignore-dependencies ${remove_formulas}
-          print '::endgroup::'
-
           local product_name
           local product_version
           read -r product_name product_version <<< \
@@ -248,6 +234,44 @@ jobs:
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-${{ matrix.os }}-ccache-x86_64-${{ needs.check-event.outputs.config }}
+
+  flatpak-build:
+    name: Build Flatpak 📦
+    runs-on: ubuntu-24.04
+    needs: check-event
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set Up Environment 🔧
+        id: setup
+        run: |
+          : Set Up Environment 🔧
+          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
+
+          read -r product_name product_version <<< \
+            "$(jq -r '. | {name, version} | join(" ")' buildspec.json)"
+
+          echo "pluginName=${product_name}" >> $GITHUB_OUTPUT
+          echo "pluginVersion=${product_version}" >> $GITHUB_OUTPUT
+
+      - name: Build Flatpak 🧱
+        uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+        with:
+          bundle: ${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-flatpak.flatpak
+          manifest-path: com.obsproject.Studio.Plugin.SceneAsTransition.json
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload Flatpak Artifact 📡
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-flatpak-${{ needs.check-event.outputs.commitHash }}
+          path: ${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-flatpak.flatpak
 
   windows-build:
     name: Build for Windows 🪟

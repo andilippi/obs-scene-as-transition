@@ -1,0 +1,31 @@
+{
+    "app-id": "com.obsproject.Studio.Plugin.SceneAsTransition",
+    "runtime": "com.obsproject.Studio",
+    "runtime-version": "stable",
+    "sdk": "org.freedesktop.Sdk//24.08",
+    "build-extension": true,
+    "separate-locales": false,
+    "appstream-compose": false,
+    "build-options": {
+        "prefix": "/app/plugins/SceneAsTransition"
+    },
+    "modules": [
+        {
+            "name": "scene-as-transition",
+            "buildsystem": "cmake-ninja",
+            "config-opts": [
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DBUILD_OUT_OF_TREE=ON",
+                "-DCMAKE_INSTALL_LIBDIR=lib",
+                "-DCMAKE_INSTALL_DATAROOTDIR=share"
+            ],
+            "sources": [
+                {
+                    "type": "git",
+                    "url": "https://github.com/StreamUPTips/obs-scene-as-transition.git",
+                    "tag": "1.2.2"
+                }
+            ]
+        }
+    ]
+}
