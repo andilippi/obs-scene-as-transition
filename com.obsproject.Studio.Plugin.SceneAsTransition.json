@@ -21,9 +21,8 @@
             ],
             "sources": [
                 {
-                    "type": "git",
-                    "url": "https://github.com/StreamUPTips/obs-scene-as-transition.git",
-                    "tag": "1.2.2"
+                    "type": "dir",
+                    "path": "."
                 }
             ]
         }
