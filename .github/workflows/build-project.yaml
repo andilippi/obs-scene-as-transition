@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: check-event
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.8
       options: --privileged
     steps:
       - uses: actions/checkout@v4
