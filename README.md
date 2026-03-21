@@ -1,40 +1,46 @@
-# Scene as Transition plugin for OBS Studio
+# Scene as Transition Plugin for OBS Studio
 
-A plugin for OBS Studio that will allow you to use a Scene as a Transition.
+Use any OBS scene as a transition. Build whatever you want with sources, filters and effects, then use it as the thing that plays between your scenes. The sky's the limit.
 
-This can be used to create all kinds of transitions. It is recommended to get the most out of this plugin that you use other powerful plugins such as [Exeldro's Move Transition plugin](https://obsproject.com/forum/resources/move-transition.913/) to create advanced movements.
-You can even make the transitions dynamic by passing information from a program like [SAMMI](https://sammi.solutions) or [Streamer.Bot](https://streamer.bot).
+Pair it with something like [Exeldro's Move Transition](https://obsproject.com/forum/resources/move-transition.913/) and you can create some genuinely advanced stuff. You can even make transitions dynamic by feeding data from [Streamer.Bot](https://streamer.bot) or [SAMMI](https://sammi.solutions). Put a text source on the transition scene and have it update with the name of the scene or game you're switching to. That sort of thing.
 
-An example would be putting a text source on the transition scene and having it update with the name of the scene or game you are transitioning to.
+Grab some ready-made examples at [StreamUP](https://streamup.tips) to get started.
 
-Some examples of this plugin will be uploaded for you to get your hands on at [StreamUP](https://streamup.tips).
+## How To Use
 
-# How To Use
-1. Under the '**Scene Transitions**' dock press '**+**' and select '**Scene**' and give the transition a name.
+1. In the **Scene Transitions** dock, press **+** and select **Scene**. Give it a name.
 
-1. You can configure the following '**Scene as Transition Properties**':
-    - **Scene** • Select the scene you wish to use as the transition.
-    - **Duration** • Set how long you wish the transition to last in milliseconds (ms).
-    - **Transition Point Settings** • Set at which point you want the current scene to switch to the new scene. This is either a **Percentage** or **Time in milliseconds** (ms).
-    - **Audio Fade Style** • Select how the audio from scene A and scene B react during the transition.
-    - **Audio Volume** • Select how loud the audio on the transition scene is.
-    - **Filter To Trigger** • Select a filter that is on your selected scene to be enabled when the transition is started.
+2. Configure the transition properties:
+   - **Scene** - Pick which scene to use as the transition.
+   - **Duration** - How long the transition lasts in milliseconds.
+   - **Transition Point** - When the actual scene switch happens underneath the transition. Set it as a percentage or a time in milliseconds.
+   - **Audio Fade Style** - *Fade Out/Fade In* fades scene A out then scene B in around the transition point. *Cross-fade* blends both simultaneously from start to finish.
+   - **Audio Volume** - How loud the transition scene's own audio plays.
+   - **Filter To Trigger** - Pick a filter on your transition scene that gets enabled when the transition starts and disabled when it finishes. Useful for triggering animations timed to the transition.
 
-# Build
-1. In-tree build
-    - Build OBS Studio: https://obsproject.com/wiki/Install-Instructions
-    - Check out this repository to plugins/scene-as-transition
-    - Add `add_subdirectory(scene-as-transition)` to plugins/CMakeLists.txt
-    - Rebuild OBS Studio
+## Good to Know
 
-1. Stand-alone build (Linux only)
-    - Verify that you have package with development files for OBS
-    - Check out this repository and run `cmake -S . -B build -DBUILD_OUT_OF_TREE=On && cmake --build build`
+- **Old plugin detection** - If you've got a legacy `scene-as-transition.dll` from a previous install, the plugin will flag it and help you sort it out so they don't clash.
+- **Media sources** - Media sources on your transition scene won't cut off at the transition point. Audio and playback continue properly through the whole transition.
+- **Filter lazy-loading** - If your selected filter isn't loaded yet when OBS starts, the plugin retries when the transition actually runs. It still gets triggered.
 
-# Support
-- [**Patreon**](https://www.patreon.com/Andilippi) - Get access to all my products and more exclusive perks
-- [**Ko-Fi**](https://ko-fi.com/andilippi) - Get access to all my products and more exclusive perks
-- [**PayPal**](https://www.paypal.me/andilippi) - Send me a beer to say thanks!
-- [**Twitch**](https://www.twitch.tv/andilippi) - Come say hi and feel free to ask questions!
-- [**YouTube**](https://www.youtube.com/andilippi) - Learn more about OBS and upgrading your streams
+## Build
 
+**In-tree build:**
+1. Build OBS Studio: https://obsproject.com/wiki/Install-Instructions
+2. Check out this repository to `frontend/plugins/obs-streamup-scene-as-transition`
+3. Add `add_subdirectory(obs-streamup-scene-as-transition)` to `frontend/plugins/CMakeLists.txt`
+4. Rebuild OBS Studio
+
+**Stand-alone build (Linux only):**
+1. Make sure you have the OBS development packages installed
+2. Check out this repository and run `cmake -S . -B build -DBUILD_OUT_OF_TREE=On && cmake --build build`
+
+## Support
+
+Built and maintained by Andi. If you're getting use out of this, consider chucking some support his way.
+
+- [**Memberships**](https://andilippi.co.uk/pages/memberships) - Access all products and exclusive perks
+- [**PayPal**](https://www.paypal.me/andilippi) - Buy me a beer
+- [**Twitch**](https://www.twitch.tv/andilippi) - Come hang out and ask questions
+- [**YouTube**](https://www.youtube.com/andilippi) - Tutorials on OBS and streaming
