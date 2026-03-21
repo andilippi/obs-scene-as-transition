@@ -1,5 +1,16 @@
 # Scene As Transition - Changelog
 
+## v1.3.0 (21 Mar '26)
+**Patch Focus:** Transition lifecycle and stability fixes
+- Fixed transition locking up OBS when no scene was selected, preventing scene or transition changes until restart
+- Fixed filter not triggering when transition point was set to 0%
+- Fixed first scene change after opening OBS not working correctly (filter not triggering, audio issues)
+- Fixed ref count leak when plugin was destroyed or settings changed mid-transition
+- Centralised transition stop logic to prevent inconsistent cleanup across destroy, update, and render paths
+- Removed redundant initialisation in plugin create
+
+---
+
 ## v1.2.1 (28 Oct '25)
 **Patch Focus:** Old plugin detection and branding update
 - Added automatic detection of old scene-as-transition.dll file
