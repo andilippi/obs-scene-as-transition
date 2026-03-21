@@ -2,7 +2,6 @@
 #include "version.h"
 #include <util/platform.h>
 #include <util/dstr.h>
-#include <obs-frontend-api.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -63,12 +62,16 @@ static float mix_b_cross_fade(void *data, float t)
 	return t;
 }
 
-void scene_as_transition_update(void *data, obs_data_t *settings)
+static void scene_as_transition_stop(struct scene_as_transition *st);
+
+static void scene_as_transition_update(void *data, obs_data_t *settings)
 {
 	struct scene_as_transition *st = data;
 	if (!st)
 		return;
 
+	/* Clean up transitioning state before swapping scene */
+	scene_as_transition_stop(st);
 	obs_source_release(st->transition_scene);
 	st->transition_scene =
 		obs_get_source_by_name(obs_data_get_string(settings, "scene"));
@@ -89,6 +92,12 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 					       settings, "transition_point") /
 				       100.0f;
 	}
+
+	/* Clamp transition_point to avoid division by zero (fix #1 & #7) */
+	if (st->transition_point < 0.001f)
+		st->transition_point = 0.001f;
+	if (st->transition_point > 0.999f)
+		st->transition_point = 0.999f;
 
 	const char *filter_name = obs_data_get_string(settings, "filter");
 
@@ -147,7 +156,8 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 				  -def) +
 		     LOG_OFFSET_DB;
 	const float mul = obs_db_to_mul(db);
-	obs_source_set_volume(st->transition_scene, mul);
+	if (st->transition_scene)
+		obs_source_set_volume(st->transition_scene, mul);
 
 	if (!obs_data_get_int(settings, "audio_fade_style")) {
 		st->mix_a = mix_a_fade_in_out;
@@ -155,11 +165,6 @@ void scene_as_transition_update(void *data, obs_data_t *settings)
 	} else {
 		st->mix_a = mix_a_cross_fade;
 		st->mix_b = mix_b_cross_fade;
-	}
-
-	// Ensure transitioning is set to true initially
-	if (!st->transitioning) {
-		st->transitioning = true;
 	}
 }
 
@@ -171,24 +176,28 @@ static void *scene_as_transition_create(obs_data_t *settings,
 	st = bzalloc(sizeof(*st));
 	st->source = source;
 
-	// Initialize transitioning to true
-	st->transitioning = true;
-
-	obs_transition_enable_fixed(st->source, true, 0);
 	obs_source_update(source, settings);
 
-	scene_as_transition_update(st, settings);
-
-	// Set initial audio mix callbacks
-	st->mix_a = mix_a_fade_in_out;
-	st->mix_b = mix_b_fade_in_out;
-
 	return st;
+}
+
+static void scene_as_transition_stop(struct scene_as_transition *st)
+{
+	if (!st->transitioning || !st->transition_scene)
+		return;
+	st->transitioning = false;
+	if (obs_source_active(st->source))
+		obs_source_dec_active(st->transition_scene);
+	if (obs_source_showing(st->source))
+		obs_source_dec_showing(st->transition_scene);
+	if (st->filter)
+		obs_source_set_enabled(st->filter, false);
 }
 
 static void scene_as_transition_destroy(void *data)
 {
 	struct scene_as_transition *st = data;
+	scene_as_transition_stop(st);
 	obs_source_release(st->transition_scene);
 	if (st->filter)
 		obs_source_release(st->filter);
@@ -202,9 +211,8 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 	struct scene_as_transition *st = data;
 
 	// NULL safety check
-	if (!st || !st->transition_scene) {
+	if (!st)
 		return;
-	}
 
 	float t = obs_transition_get_time(st->source);
 	bool use_a = t < st->transition_point;
@@ -215,11 +223,12 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 	if (!obs_transition_video_render_direct(st->source, target))
 		return;
 
-	if (t > 0.0f && t < 1.0f) {
-		obs_source_video_render(st->transition_scene);
-	}
+	// If no transition scene is selected, just do a direct cut
+	if (!st->transition_scene)
+		return;
 
-	if (use_a) {
+	/* Start transitioning when we enter the 0..1 range */
+	if (t > 0.0f && t < 1.0f) {
 		if (!st->transitioning) {
 			st->transitioning = true;
 			if (obs_source_showing(st->source))
@@ -238,7 +247,7 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 					st->filter = obs_source_get_filter_by_name(
 						st->transition_scene, st->filter_name);
 					if (st->filter) {
-						blog(LOG_INFO,
+						blog(LOG_DEBUG,
 						     "[StreamUP Scene as Transition] Lazy loading succeeded: "
 						     "Found filter '%s' on scene '%s'",
 						     st->filter_name,
@@ -258,15 +267,7 @@ static void scene_as_transition_video_render(void *data, gs_effect_t *effect)
 		}
 		obs_source_video_render(st->transition_scene);
 	} else if ((t <= 0.0f || t >= 1.0f) && st->transitioning) {
-		st->transitioning = false;
-		if (obs_source_active(st->source))
-			obs_source_dec_active(st->transition_scene);
-		if (obs_source_showing(st->source))
-			obs_source_dec_showing(st->transition_scene);
-
-		// Disable filter when transition ends
-		if (st->filter)
-			obs_source_set_enabled(st->filter, false);
+		scene_as_transition_stop(st);
 	}
 
 	UNUSED_PARAMETER(effect);
@@ -278,8 +279,16 @@ static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
 					     size_t sample_rate)
 {
 	struct scene_as_transition *st = data;
-	if (!st || !st->transition_scene)
+	if (!st)
 		return false;
+
+	// If no transition scene, still let OBS handle the audio transition
+	if (!st->transition_scene) {
+		return obs_transition_audio_render(st->source, ts_out,
+						   audio, mixers,
+						   channels, sample_rate,
+						   st->mix_a, st->mix_b);
+	}
 
 	uint64_t ts = 0;
 	if (!obs_source_audio_pending(st->transition_scene)) {
@@ -305,9 +314,9 @@ static bool scene_as_transition_audio_render(void *data, uint64_t *ts_out,
 			continue;
 
 		for (size_t ch = 0; ch < channels; ch++) {
-			register float *out = audio->output[mix].data[ch];
-			register float *in = child_audio.output[mix].data[ch];
-			register float *end = in + AUDIO_OUTPUT_FRAMES;
+			float *out = audio->output[mix].data[ch];
+			float *in = child_audio.output[mix].data[ch];
+			float *end = in + AUDIO_OUTPUT_FRAMES;
 
 			while (in < end)
 				*(out++) += *(in++);
@@ -327,7 +336,7 @@ static enum gs_color_space scene_as_transition_video_get_color_space(
 	return obs_transition_video_get_color_space(st->source);
 }
 
-void scene_as_transition_defaults(obs_data_t *settings)
+static void scene_as_transition_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_double(settings, "duration", 1000.0);
 	obs_data_set_default_double(settings, "transition_point", 50.0);
@@ -360,8 +369,8 @@ static bool transition_point_type_modified(obs_properties_t *ppts,
 	return true;
 }
 
-bool scene_as_transition_list_add_scene(void *data,
-					obs_source_t *transition_scene)
+static bool scene_as_transition_list_add_scene(void *data,
+					       obs_source_t *transition_scene)
 {
 	obs_property_t *prop = data;
 	const char *name = obs_source_get_name(transition_scene);
@@ -369,8 +378,8 @@ bool scene_as_transition_list_add_scene(void *data,
 	return true;
 }
 
-void scene_as_transition_list_add_filter(obs_source_t *parent,
-					 obs_source_t *child, void *data)
+static void scene_as_transition_list_add_filter(obs_source_t *parent,
+						obs_source_t *child, void *data)
 {
 	UNUSED_PARAMETER(parent);
 	obs_property_t *p = data;
@@ -392,8 +401,10 @@ static bool scene_modified(obs_properties_t *props, obs_property_t *property,
 		obs_property_list_clear(filter);
 		obs_property_list_add_string(
 			filter, obs_module_text("Filter.NoSelection"), "filter");
-		obs_source_enum_filters(
-			scene, scene_as_transition_list_add_filter, filter);
+		if (scene)
+			obs_source_enum_filters(
+				scene, scene_as_transition_list_add_filter,
+				filter);
 
 		obs_data_set_string(settings, "filter",
 				    obs_module_text("Filter.NoSelection"));
@@ -423,9 +434,8 @@ static void scene_as_transition_enum_all_sources(
 		enum_callback(st->source, st->transition_scene, param);
 }
 
-obs_properties_t *scene_as_transition_properties(void *data)
+static obs_properties_t *scene_as_transition_properties(void *data)
 {
-
 	struct scene_as_transition *st = data;
 
 	obs_properties_t *props = obs_properties_create();
@@ -506,8 +516,10 @@ obs_properties_t *scene_as_transition_properties(void *data)
 		filter, obs_module_text("Filter.NoSelection"), "filter");
 	obs_property_set_long_description(
 		filter, obs_module_text("Filter.ToTrigger.Description"));
-	obs_source_enum_filters(st->transition_scene,
-				scene_as_transition_list_add_filter, filter);
+	if (st && st->transition_scene)
+		obs_source_enum_filters(st->transition_scene,
+					scene_as_transition_list_add_filter,
+					filter);
 
 	obs_properties_add_text(
 		props, "plugin_info",
@@ -515,12 +527,10 @@ obs_properties_t *scene_as_transition_properties(void *data)
 		") by Andi Stone ( <a href=\"https://www.youtube.com/andilippi\">Andilippi</a> ) | A <a href=\"https://streamup.tips\">StreamUP</a> Product",
 		OBS_TEXT_INFO);
 
-	UNUSED_PARAMETER(data);
-
 	return props;
 }
 
-struct obs_source_info scene_as_transition = {
+static struct obs_source_info scene_as_transition = {
 	.id = "scene_as_transition",
 	.type = OBS_SOURCE_TYPE_TRANSITION,
 	.get_name = scene_as_transition_get_name,
@@ -675,9 +685,13 @@ static void find_old_plugin_files(struct dstr *found_path)
 	     plugin_dir.array);
 
 	// List of possible old plugin names to check
+	// Includes .dll (Windows), .so (Linux); macOS uses .plugin bundles
 	const char *old_plugin_names[] = {"scene-as-transition.dll",
 					  "obs-scene-as-transition.dll",
-					  "SceneAsTransition.dll", NULL};
+					  "SceneAsTransition.dll",
+					  "scene-as-transition.so",
+					  "obs-scene-as-transition.so",
+					  NULL};
 
 	struct dstr old_plugin_path = {0};
 
@@ -770,4 +784,9 @@ bool obs_module_load(void)
 
 	obs_register_source(&scene_as_transition);
 	return true;
+}
+
+void obs_module_unload(void)
+{
+	blog(LOG_INFO, "[StreamUP Scene as Transition] Plugin unloaded");
 }

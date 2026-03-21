@@ -26,19 +26,6 @@ else()
   target_link_libraries(${PROJECT_NAME} PRIVATE OBS::frontend-api)
 endif()
 
-# Qt
-find_package(Qt6 COMPONENTS Widgets Core)
-if(BUILD_OUT_OF_TREE)
-  if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
-    find_package(Qt6 REQUIRED Gui)
-  endif()
-endif()
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets)
-
-# CURL
-find_package(CURL REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
-
 # Determine shared directory path (support both in-tree and out-of-tree builds)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shared")
   set(OBS_SHARED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared")
@@ -52,11 +39,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${OBS_SHARED_DIR}
 )
 
-# Extra Qt linkage on older Qt versions for *nix
-if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
-  target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
-endif()
-
 # Compiler / build flags
 target_compile_options(${PROJECT_NAME} PRIVATE
   $<$<C_COMPILER_ID:Clang,AppleClang>:
@@ -67,9 +49,6 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
   MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
-  AUTOMOC ON
-  AUTOUIC ON
-  AUTORCC ON
 )
 
 # Version header
