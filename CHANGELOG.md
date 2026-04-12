@@ -1,10 +1,11 @@
 # Scene As Transition - Changelog
 
 ## v1.3.1 (12 Apr '26)
-**Patch Focus:** Filter reliability & old plugin detection
+**Patch Focus:** Filter reliability, old plugin detection & Qt 6.10 compat
 - Fixed Filter to Trigger breaking after OBS updates because the filter reference was cached at load time and never refreshed. Filter is now looked up fresh at each transition start and released on stop
 - Improved old plugin detection to search beyond the current module directory. Now uses obs_enum_modules() first, then falls back to multi-directory search covering ProgramData and AppData installs
 - Old plugin detection dialog now offers one-click removal (rename to .old) or open folder
+- Fixed out-of-tree build failure on Qt 6.10 where GuiPrivate required a separate find_package() call
 
 ## v1.3.0 (21 Mar '26)
 **Patch Focus:** Transition lifecycle and stability fixes
