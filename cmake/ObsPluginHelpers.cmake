@@ -124,7 +124,10 @@ macro(find_qt)
   list(APPEND _QT_COMPONENTS Core)
 
   if("Gui" IN_LIST FIND_QT_COMPONENTS_LINUX)
-    list(APPEND _QT_COMPONENTS "GuiPrivate")
+    find_package(Qt${_QT_VERSION} COMPONENTS GuiPrivate QUIET)
+    if(TARGET Qt${_QT_VERSION}::GuiPrivate)
+      list(APPEND _QT_COMPONENTS "GuiPrivate")
+    endif()
   endif()
 
   # Check for versionless targets of each requested component and create if necessary
