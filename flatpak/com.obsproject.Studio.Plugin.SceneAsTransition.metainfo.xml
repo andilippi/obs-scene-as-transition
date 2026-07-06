@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="addon">
+  <id>com.obsproject.Studio.Plugin.SceneAsTransition</id>
+  <extends>com.obsproject.Studio</extends>
+  <name>Scene As Transition</name>
+  <summary>Use a scene as a transition between two scenes in OBS Studio</summary>
+  <developer id="tips.streamup">
+    <name>Andi Stone Media</name>
+  </developer>
+  <url type="homepage">https://github.com/StreamUPTips/obs-streamup-scene-as-transition</url>
+  <url type="bugtracker">https://github.com/StreamUPTips/obs-streamup-scene-as-transition/issues</url>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-only</project_license>
+  <releases>
+    <release version="1.3.1" date="2026-04-12">
+      <description>
+        <p>Maintenance release with build fixes and Qt 6.10 compatibility.</p>
+      </description>
+    </release>
+    <release version="1.2.1" date="2025-10-28">
+      <description/>
+    </release>
+    <release version="1.2.0" date="2025-10-27">
+      <description/>
+    </release>
+    <release version="1.1.1" date="2024-06-25">
+      <description/>
+    </release>
+    <release version="1.1.0" date="2023-04-14">
+      <description/>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>
